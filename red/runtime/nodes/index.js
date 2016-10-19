@@ -77,8 +77,8 @@ function createNode(node,def) {
 
 function init(runtime) {
     settings = runtime.settings;
-    credentials.init(runtime.storage);
-    flows.init(runtime.settings,runtime.storage);
+    credentials.init(runtime);
+    flows.init(runtime);
     registry.init(runtime);
     context.init(runtime.settings);
 }
@@ -110,6 +110,7 @@ module.exports = {
     getNode: flows.get,
     eachNode: flows.eachNode,
 
+    paletteEditorEnabled: registry.paletteEditorEnabled,
     installModule: registry.installModule,
     uninstallModule: uninstallModule,
 

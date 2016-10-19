@@ -36,6 +36,7 @@ function load(defaultNodesDir,disableNodePathScan) {
     // We should expose that as an option at some point, although the
     // performance gains are minimal.
     //return loadNodeFiles(registry.getModuleList());
+    runtime.log.info(runtime.log._("server.loading"));
 
     var nodeFiles = localfilesystem.getNodeFiles(defaultNodesDir,disableNodePathScan);
     return loadNodeFiles(nodeFiles);
@@ -188,7 +189,8 @@ function loadNodeConfig(fileInfo) {
             template: file.replace(/\.js$/,".html"),
             enabled: isEnabled,
             loaded:false,
-            version: version
+            version: version,
+            local: fileInfo.local
         };
         if (fileInfo.hasOwnProperty("types")) {
             node.types = fileInfo.types;

@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 IBM Corp.
+ * Copyright 2015, 2016 IBM Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ var defaultContext = {
 var theme = null;
 var themeContext = clone(defaultContext);
 var themeSettings = null;
+var runtime = null;
 
 function serveFile(app,baseUrl,file) {
     try {
@@ -94,7 +95,7 @@ module.exports = {
                     themeContext.page.favicon = url;
                 }
             }
-            
+
             if (theme.page.tabicon) {
                 url = serveFile(themeApp,"/tabicon/",theme.page.tabicon)
                 if (url) {
@@ -161,6 +162,9 @@ module.exports = {
             themeSettings.menu = theme.menu;
         }
 
+        if (theme.hasOwnProperty("palette")) {
+            themeSettings.palette = theme.palette;
+        }
         return themeApp;
     },
     context: function() {

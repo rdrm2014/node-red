@@ -30,7 +30,9 @@ describe("api index", function() {
         before(function() {
             api.init({},{
                 settings:{httpNodeRoot:true, httpAdminRoot: true,disableEditor:true},
-                events: {on:function(){},removeListener: function(){}}
+                events: {on:function(){},removeListener: function(){}},
+                log: {info:function(){},_:function(){}},
+                nodes: {paletteEditorEnabled: function(){return true}}
             });
             app = api.adminApp;
         });
@@ -119,7 +121,7 @@ describe("api index", function() {
                         return done(err);
                     }
                     res.text.should.eql("Not started");
-                    errorLog.calledOnce.should.be.true;
+                    errorLog.calledOnce.should.be.true();
                     done();
                 });
         });

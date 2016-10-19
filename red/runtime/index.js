@@ -83,7 +83,7 @@ function start() {
         .then(function() {
             return i18n.registerMessageCatalog("runtime",path.resolve(path.join(__dirname,"locales")),"runtime.json")
         })
-        .then(function() { return storage.init(settings)})
+        .then(function() { return storage.init(runtime)})
         .then(function() { return settings.load(storage)})
         .then(function() {
 
@@ -98,7 +98,6 @@ function start() {
             }
             log.info(log._("runtime.version",{component:"Node.js ",version:process.version}));
             log.info(os.type()+" "+os.release()+" "+os.arch()+" "+os.endianness());
-            log.info(log._("server.loading"));
             return redNodes.load().then(function() {
 
                 var i;
