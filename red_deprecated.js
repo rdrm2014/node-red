@@ -26,47 +26,8 @@ var path = require("path");
 var fs = require("fs-extra");
 var RED = require("./red/red.js");
 
-/////*////
-
-var location =  process.cwd() + "/";
-var passport = require('passport');
-var mongoose = require('mongoose');
-var config = require(location + "config/config");
-require('./config/passport')(passport); // pass passport for configuration
-// connect to the database
-mongoose.connect(config.get('mongoose:uri'));
-
-var cookieParser = require('cookie-parser');
-var bodyParser = require("body-parser");
-var session = require('express-session');
-
-
-//*///
-
-
 var server;
 var app = express();
-
-////*///
-
-    app.set('views', __dirname + '/views');
-    app.set('view engine', 'pug');
-    //app.set('view engine', 'ejs');
-
-    app.use(cookieParser());
-    app.use(bodyParser());
-    app.use(bodyParser.urlencoded({extended: true}));
-
-    app.use(session({secret: 'cookie monster'}));
-
-    app.use(passport.initialize());
-    app.use(passport.session());
-    //app.use(app.router);
-    app.use(express.static(location + 'public'));
-
-require('./app/routes')(app, passport);
-
-//*/
 
 var settingsFile;
 var flowFile;

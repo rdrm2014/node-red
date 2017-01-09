@@ -49,6 +49,7 @@ module.exports = {
 
     // The file containing the flows. If not set, it defaults to flows_<hostname>.json
     //flowFile: 'flows.json',
+    flowFile: 'precisionAgriculture_v3.json',
 
     // To enabled pretty-printing of the flow within the flow file, set the following
     //  property to true:
@@ -80,10 +81,11 @@ module.exports = {
     // can be used to specifiy a different root path. If set to false, this is
     // disabled.
     //httpNodeRoot: '/red-nodes',
+    //httpNodeRoot: '/nodes',
 
     // The following property can be used in place of 'httpAdminRoot' and 'httpNodeRoot',
     // to apply the same root to both parts.
-    //httpRoot: '/red',
+    httpRoot: '/red',
 
     // When httpAdminRoot is used to move the UI to a different root path, the
     // following property can be used to identify a directory of static content
@@ -96,7 +98,7 @@ module.exports = {
 
     // If you installed the optional node-red-dashboard you can set it's path
     // relative to httpRoot
-    //ui: { path: "ui" },
+    ui: { path: "ui" },
 
     // Securing Node-RED
     // -----------------
