@@ -304,10 +304,10 @@ RED.palette.editor = (function() {
             filterInput.focus();
         },250);
         RED.events.emit("palette-editor:open");
-        RED.keyboard.add("*",/* ESCAPE */ 27,function(){hidePaletteEditor();d3.event.preventDefault();});
+        RED.keyboard.add("*","escape",function(){hidePaletteEditor()});
     }
     function hidePaletteEditor() {
-        RED.keyboard.remove("*");
+        RED.keyboard.remove("escape");
         $("#main-container").removeClass("palette-expanded");
         $("#header-shade").hide();
         $("#editor-shade").hide();
@@ -338,36 +338,45 @@ RED.palette.editor = (function() {
     var catalogueCount;
     var catalogueLoadStatus = [];
     var catalogueLoadStart;
+    var catalogueLoadErrors = false;
 
     var activeSort = sortModulesAZ;
 
-    function handleCatalogResponse(catalog,index,v) {
-        catalogueLoadStatus.push(v);
-        if (v.modules) {
-            v.modules.forEach(function(m) {
-                loadedIndex[m.id] = m;
-                m.index = [m.id];
-                if (m.keywords) {
-                    m.index = m.index.concat(m.keywords);
-                }
-                if (m.updated_at) {
-                    m.timestamp = new Date(m.updated_at).getTime();
-                } else {
-                    m.timestamp = 0;
-                }
-                m.index = m.index.join(",").toLowerCase();
-            })
-            loadedList = loadedList.concat(v.modules);
+    function handleCatalogResponse(err,catalog,index,v) {
+        catalogueLoadStatus.push(err||v);
+        if (!err) {
+            if (v.modules) {
+                v.modules.forEach(function(m) {
+                    loadedIndex[m.id] = m;
+                    m.index = [m.id];
+                    if (m.keywords) {
+                        m.index = m.index.concat(m.keywords);
+                    }
+                    if (m.updated_at) {
+                        m.timestamp = new Date(m.updated_at).getTime();
+                    } else {
+                        m.timestamp = 0;
+                    }
+                    m.index = m.index.join(",").toLowerCase();
+                })
+                loadedList = loadedList.concat(v.modules);
+            }
+            searchInput.searchBox('count',loadedList.length);
+        } else {
+            catalogueLoadErrors = true;
         }
-        searchInput.searchBox('count',loadedList.length);
         if (catalogueCount > 1) {
             $(".palette-module-shade-status").html(RED._('palette.editor.loading')+"<br>"+catalogueLoadStatus.length+"/"+catalogueCount);
         }
         if (catalogueLoadStatus.length === catalogueCount) {
+            if (catalogueLoadErrors) {
+                RED.notify(RED._('palette.editor.errors.catalogLoadFailed',{url: catalog}),"error",false,8000);
+            }
             var delta = 250-(Date.now() - catalogueLoadStart);
             setTimeout(function() {
                 $("#palette-module-install-shade").hide();
             },Math.max(delta,0));
+
         }
     }
 
@@ -379,6 +388,7 @@ RED.palette.editor = (function() {
             $(".palette-module-shade-status").html(RED._('palette.editor.loading'));
             var catalogues = RED.settings.theme('palette.catalogues')||['https://catalogue.nodered.org/catalogue.json'];
             catalogueLoadStatus = [];
+            catalogueLoadErrors = false;
             catalogueCount = catalogues.length;
             if (catalogues.length > 1) {
                 $(".palette-module-shade-status").html(RED._('palette.editor.loading')+"<br>0/"+catalogues.length);
@@ -387,8 +397,10 @@ RED.palette.editor = (function() {
             catalogueLoadStart = Date.now();
             catalogues.forEach(function(catalog,index) {
                 $.getJSON(catalog, {_: new Date().getTime()},function(v) {
-                    handleCatalogResponse(catalog,index,v);
+                    handleCatalogResponse(null,catalog,index,v);
                     refreshNodeModuleList();
+                }).fail(function(jqxhr, textStatus, error) {
+                    handleCatalogResponse(jqxhr,catalog,index);
                 })
             });
         }
@@ -424,8 +436,10 @@ RED.palette.editor = (function() {
         RED.events.on("editor:close",function() { disabled = false; });
         RED.events.on("search:open",function() { disabled = true; });
         RED.events.on("search:close",function() { disabled = false; });
+        RED.events.on("type-search:open",function() { disabled = true; });
+        RED.events.on("type-search:close",function() { disabled = false; });
 
-        RED.keyboard.add("*", /* p */ 80,{shift:true,ctrl:true},function() {RED.palette.editor.show();d3.event.preventDefault();});
+        RED.actions.add("core:manage-palette",RED.palette.editor.show);
 
         editorTabs = RED.tabs.create({
             id:"palette-editor-tabs",
@@ -518,7 +532,12 @@ RED.palette.editor = (function() {
                         evt.preventDefault();
                         shade.show();
                         removeNodeModule(entry.name, function(xhr) {
-                            console.log(xhr);
+                            shade.hide();
+                            if (xhr) {
+                                if (xhr.responseJSON) {
+                                    RED.notify(RED._('palette.editor.errors.removeFailed',{module: entry.name,message:xhr.responseJSON.message}));
+                                }
+                            }
                         })
                     })
                     if (!entry.local) {
@@ -631,7 +650,7 @@ RED.palette.editor = (function() {
 
 
         $('<span>').html(RED._("palette.editor.sort")+' ').appendTo(toolBar);
-        var sortGroup = $('<span class="button-group"></span> ').appendTo(toolBar);
+        var sortGroup = $('<span class="button-group"></span>').appendTo(toolBar);
         var sortAZ = $('<a href="#" class="sidebar-header-button-toggle selected" data-i18n="palette.editor.sortAZ"></a>').appendTo(sortGroup);
         var sortRecent = $('<a href="#" class="sidebar-header-button-toggle" data-i18n="palette.editor.sortRecent"></a>').appendTo(sortGroup);
 
@@ -754,7 +773,9 @@ RED.palette.editor = (function() {
             refreshNodeModule(ns.module);
             for (var i=0;i<filteredList.length;i++) {
                 if (filteredList[i].info.id === ns.module) {
-                    filteredList[i].elements.installButton.hide();
+                    var installButton = filteredList[i].elements.installButton;
+                    installButton.addClass('disabled');
+                    installButton.html(RED._('palette.editor.installed'));
                     break;
                 }
             }
@@ -768,7 +789,9 @@ RED.palette.editor = (function() {
                     delete nodeEntries[ns.module];
                     for (var i=0;i<filteredList.length;i++) {
                         if (filteredList[i].info.id === ns.module) {
-                            filteredList[i].elements.installButton.show();
+                            var installButton = filteredList[i].elements.installButton;
+                            installButton.removeClass('disabled');
+                            installButton.html(RED._('palette.editor.install'));
                             break;
                         }
                     }
