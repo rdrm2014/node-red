@@ -3,7 +3,7 @@ block content
     .container
         .row
             .col-md-12
-                h3 Peer Listing
+                h3 peer Listing
         .row
             .col-md-12
                 if Peers
@@ -15,23 +15,23 @@ block content
                             th
                             th
                             th
-                        each Peer in Peers
-                            tr(data-id="#{Peer.id}" data-model="Peer")
-                                td #{Peer.name}
-                                td #{Peer.description}
-                                td #{Peer.ip}
+                        each peer in Peers
+                            tr(data-id=peer.id data-model="peer")
+                                td #{peer.name}
+                                td #{peer.description}
+                                td #{peer.ip}
                                 td
-                                    a(href="/peer/show?id=#{Peer.id}"  class="btn btn-primary btn-sm" role="button") Show
+                                    a(href="/peers/show?id="+peer.id  class="btn btn-primary btn-sm" role="button") Show
                                 td
-                                    a(href="/peer/edit?id=#{Peer.id}"  class="btn btn-primary btn-sm" role="button") Edit
+                                    a(href="/peers/edit?id="+peer.id  class="btn btn-primary btn-sm" role="button") Edit
                                 td
-                                    form(action="/peer/destroy" method="POST")
+                                    form(action="/peers/destroy" method="POST")
                                         //input(type="hidden" name="_method" value="delete")
-                                        input(type="hidden" name="id" value="#{Peer.id}")
+                                        input(type="hidden" name="id" value=peer.id)
                                         input(type="submit" value="Delete"  class="btn btn-danger btn-sm" role="button")
 
         .row
             .col-md-12
-                a(href="/peer/new/" class="btn btn-success btn-sm" role="button") New
+                a(href="/peers/new/" class="btn btn-success btn-sm" role="button") New
 
         hr

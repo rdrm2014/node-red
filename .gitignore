@@ -18,3 +18,4 @@ public
 locales/zz-ZZ
 nodes/core/locales/zz-ZZ
 .idea
+app/config/config.json

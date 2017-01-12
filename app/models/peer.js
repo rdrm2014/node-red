@@ -1,13 +1,13 @@
 /**
- * Created by ricardomendes on 20/11/15.
+ * Created by ricardomendes on 10/01/17.
  */
 var mongoose = require('mongoose');
-
 // define the schema for our peer model
 var peerSchema = mongoose.Schema({
-        name        : String,
-        description : String,
-        ip          : String
+    owner: {type: mongoose.Schema.Types.ObjectId, ref: 'User'},
+    name: String,
+    description: String,
+    ip: String
 });
 
 // create the model for peers and expose it to our app

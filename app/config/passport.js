@@ -1,18 +1,19 @@
 /**
- * Created by ricardomendes on 11/11/15.
+ * Created by ricardomendes on 10/01/17.
  */
-var location =  process.cwd() + "/";
-var config = require(location + "config/config");
+var location =  process.cwd() + '/app/';
 
+//var config = require(location + "config/config");
+//console.log(config);
 var LocalStrategy = require('passport-local').Strategy;
 var FacebookStrategy = require('passport-facebook').Strategy;
 var TwitterStrategy = require('passport-twitter').Strategy;
 var GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
 
 // load up the user model
-var User = require('../app/models/user');
+var User = require(location+'models/user');
 
-module.exports = function (passport) {
+module.exports = function (config, passport) {
 
     // =========================================================================
     // passport session setup ==================================================

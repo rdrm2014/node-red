@@ -3,7 +3,7 @@ block content
     .container
         .row
             .col-md-12
-                form(action="/Peer/create" method="POST" role="form" class="new")
+                form(action="/peers/create" method="POST" role="form" class="new")
                     .form-group
                         h2 Create a Peer
 
@@ -17,4 +17,4 @@ block content
                             label IP
                             input(name="ip" type="text" class="form-control")
                     input(type="submit" value="Submit" class="btn btn-default")
-                a(href="/peer" class="btn btn-danger") Back to list
+                a(href="/peers" class="btn btn-danger") Back to list
