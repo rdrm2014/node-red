@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,7 +151,7 @@ RED.sidebar.info = (function() {
         var started = false;
         var enabled = true;
         var startDelay = 1000;
-        var cycleDelay = 10000;
+        var cycleDelay = 15000;
         var startTimeout;
         var refreshTimeout;
         var tipCount = -1;

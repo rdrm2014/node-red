@@ -1,5 +1,5 @@
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,7 +189,9 @@ module.exports = function(RED) {
         }
     });
 
-    RED.httpAdmin.get("/debug/view/*",RED.auth.needsPermission("debug.read"),function(req,res) {
+    // As debug/view/debug-utils.js is loaded via <script> tag, it won't get
+    // the auth header attached. So do not use RED.auth.needsPermission here.
+    RED.httpAdmin.get("/debug/view/*",function(req,res) {
         var options = {
             root: __dirname + '/lib/debug/',
             dotfiles: 'deny'

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Copyright 2013, 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,6 +146,7 @@ if (parsedArgs.help) {
     console.log("Documentation can be found at http://nodered.org");
     process.exit();
 }
+
 if (parsedArgs.argv.remain.length > 0) {
     flowFile = parsedArgs.argv.remain[0];
 }
@@ -169,7 +170,7 @@ if (parsedArgs.settings) {
         } else {
             var defaultSettings = path.join(__dirname, "settings.js");
             var settingsStat = fs.statSync(defaultSettings);
-            if (settingsStat.mtime.getTime() < settingsStat.ctime.getTime()) {
+            if (settingsStat.mtime.getTime() <= settingsStat.ctime.getTime()) {
                 // Default settings file has not been modified - safe to copy
                 fs.copySync(defaultSettings, userSettingsFile);
                 settingsFile = userSettingsFile;
@@ -252,9 +253,12 @@ if (parsedArgs.userDir) {
 }
 
 try {
-    RED.init(server, settings);
-} catch (err) {
-    if (err.code == "not_built") {
+    RED.init(server,settings);
+} catch(err) {
+    if (err.code == "unsupported_version") {
+        console.log("Unsupported version of node.js:",process.version);
+        console.log("Node-RED requires node.js v4 or later");
+    } else if  (err.code == "not_built") {
         console.log("Node-RED has not been built. See README.md for details");
     } else {
         console.log("Failed to start server:");

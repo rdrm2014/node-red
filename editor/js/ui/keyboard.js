@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -253,7 +253,7 @@ RED.keyboard = (function() {
         delete slot.ondown;
     }
 
-    var dialog = null;
+    var shortcutDialog = null;
 
     var cmdCtrlKey = '<span class="help-key">'+(isMac?'&#8984;':'Ctrl')+'</span>';
 
@@ -261,51 +261,69 @@ RED.keyboard = (function() {
         if (!RED.settings.theme("menu.menu-item-keyboard-shortcuts",true)) {
             return;
         }
-        if (!dialog) {
-            dialog = $('<div id="keyboard-help-dialog" class="hide">'+
-                '<div style="vertical-align: top;display:inline-block; box-sizing: border-box; width:50%; padding: 10px;">'+
-                    '<table class="keyboard-shortcuts">'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">a</span></td><td>'+RED._("keyboard.selectAll")+'</td></tr>'+
-                        '<tr><td><span class="help-key">Shift</span> + <span class="help-key">Click</span></td><td>'+RED._("keyboard.selectAllConnected")+'</td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">Click</span></td><td>'+RED._("keyboard.addRemoveNode")+'</td></tr>'+
-                        '<tr><td>&nbsp;</td><td></td></tr>'+
-                        '<tr><td><span class="help-key">Enter</span></td><td>'+RED._("keyboard.editSelected")+'</td></tr>'+
-                        '<tr><td><span class="help-key">Delete</span> / <span class="help-key">Backspace</span></td><td>'+RED._("keyboard.deleteSelected")+'</td></tr>'+
-                        '<tr><td>&nbsp;</td><td></td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">i</span></td><td>'+RED._("keyboard.importNode")+'</td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">e</span></td><td>'+RED._("keyboard.exportNode")+'</td></tr>'+
-                    '</table>'+
+        if (!shortcutDialog) {
+            shortcutDialog = $('<div id="keyboard-help-dialog" class="hide">'+
+                '<div class="keyboard-shortcut-entry keyboard-shortcut-list-header">'+
+                    '<div class="keyboard-shortcut-entry-key">shortcut</div>'+
+                    '<div class="keyboard-shortcut-entry-key">action</div>'+
+                    '<div class="keyboard-shortcut-entry-scope">scope</div>'+
                 '</div>'+
-                '<div style="vertical-align: top;display:inline-block; box-sizing: border-box; width:50%; padding: 10px;">'+
-                    '<table class="keyboard-shortcuts">'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">Space</span></td><td>'+RED._("keyboard.toggleSidebar")+'</td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">f</span></td><td>'+RED._("keyboard.searchBox")+'</td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">Shift</span> + <span class="help-key">p</span></td><td>'+RED._("keyboard.managePalette")+'</td></tr>'+
-                        '<tr><td>&nbsp;</td><td></td></tr>'+
-                        '<tr><td><span class="help-key">&#x2190</span> <span class="help-key">&#x2191;</span> <span class="help-key">&#x2192;</span> <span class="help-key">&#x2193;</span></td><td>'+RED._("keyboard.nudgeNode")+'</td></tr>'+
-                        '<tr><td><span class="help-key">Shift</span> + <span class="help-key">&#x2190;</span> <span class="help-key">&#x2191;</span> <span class="help-key">&#x2192;</span> <span class="help-key">&#x2193;</span></td><td>'+RED._("keyboard.moveNode")+'</td></tr>'+
-                        '<tr><td>&nbsp;</td><td></td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">c</span></td><td>'+RED._("keyboard.copyNode")+'</td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">x</span></td><td>'+RED._("keyboard.cutNode")+'</td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">v</span></td><td>'+RED._("keyboard.pasteNode")+'</td></tr>'+
-                        '<tr><td>'+cmdCtrlKey+' + <span class="help-key">z</span></td><td>'+RED._("keyboard.undoChange")+'</td></tr>'+
-                    '</table>'+
-                '</div>'+
+                '<ol id="keyboard-shortcut-list"></ol>'+
                 '</div>')
-            .appendTo("body")
-            .dialog({
+            .appendTo("body");
+
+            var shortcutList = $('#keyboard-shortcut-list').editableList({
+                addButton: false,
+                scrollOnAdd: false,
+                addItem: function(container,i,object) {
+                    var item = $('<div class="keyboard-shortcut-entry">').appendTo(container);
+
+                    var key = $('<div class="keyboard-shortcut-entry-key">').appendTo(item);
+                    if (object.key) {
+                        key.append(formatKey(object.key));
+                    } else {
+                        item.addClass("keyboard-shortcut-entry-unassigned");
+                        key.html(RED._('keyboard.unassigned'));
+                    }
+
+                    var text = object.id.replace(/(^.+:([a-z]))|(-([a-z]))/g,function() {
+                        if (arguments[5] === 0) {
+                            return arguments[2].toUpperCase();
+                        } else {
+                            return " "+arguments[4].toUpperCase();
+                        }
+                    });
+                    var label = $('<div>').html(text).appendTo(item);
+                    if (object.scope) {
+                        $('<div class="keyboard-shortcut-entry-scope">').html(object.scope).appendTo(item);
+                    }
+
+
+                },
+            });
+            var shortcuts = RED.actions.list();
+            shortcuts.sort(function(A,B) {
+                return A.id.localeCompare(B.id);
+            });
+            shortcuts.forEach(function(s) {
+                shortcutList.editableList('addItem',s);
+            })
+
+            shortcutDialog.dialog({
                 modal: true,
                 autoOpen: false,
                 width: "800",
-                title:"Keyboard shortcuts",
+                height: "400",
+                title:RED._("keyboard.title"),
                 resizable: false
             });
         }
 
-        dialog.dialog("open");
+        shortcutDialog.dialog("open");
     }
     function formatKey(key) {
         var formattedKey = isMac?key.replace(/ctrl-?/,"&#8984;"):key;
+        formattedKey = isMac?formattedKey.replace(/alt-?/,"&#8997;"):key;
         formattedKey = formattedKey.replace(/shift-?/,"&#8679;")
         formattedKey = formattedKey.replace(/left/,"&#x2190;")
         formattedKey = formattedKey.replace(/up/,"&#x2191;")

@@ -1,5 +1,5 @@
 /**
- * Copyright 2014, 2015 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,7 @@ function init(runtime) {
 
 function loadFlows() {
     return storage.getFlows().then(function(config) {
+        log.debug("loaded flow revision: "+config.rev);
         return credentials.load(config.credentials).then(function() {
             return config;
         });
@@ -94,8 +95,9 @@ function setFlows(_config,type,muteLog) {
     var config = null;
     var diff;
     var newFlowConfig;
-
+    var isLoad = false;
     if (type === "load") {
+        isLoad = true;
         configSavePromise = loadFlows().then(function(_config) {
             config = clone(_config.flows);
             newFlowConfig = flowUtil.parseConfig(clone(config));
@@ -122,6 +124,9 @@ function setFlows(_config,type,muteLog) {
 
     return configSavePromise
         .then(function(flowRevision) {
+            if (!isLoad) {
+                log.debug("saved flow revision: "+flowRevision);
+            }
             activeConfig = {
                 flows:config,
                 rev:flowRevision

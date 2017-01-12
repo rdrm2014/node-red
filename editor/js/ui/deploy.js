@@ -1,5 +1,5 @@
 /**
- * Copyright 2016 IBM Corp.
+ * Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,6 +89,8 @@ RED.deploy = (function() {
         }
 
         $('#btn-deploy').click(function() { save(); });
+
+        RED.actions.add("core:deploy-flows",save);
 
         $( "#node-dialog-confirm-deploy" ).dialog({
                 title: RED._('deploy.confirm.button.confirm'),
