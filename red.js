@@ -117,12 +117,14 @@ var knownOpts = {
     "verbose": Boolean
 };
 var shortHands = {
-    "?": ["--help"],
-    "p": ["--port"],
-    "s": ["--settings"],
-    "t": ["--help"],
-    "u": ["--userDir"],
-    "v": ["--verbose"]
+    "?":["--help"],
+    "p":["--port"],
+    "s":["--settings"],
+    // As we want to reserve -t for now, adding a shorthand to help so it
+    // doesn't get treated as --title
+    "t":["--help"],
+    "u":["--userDir"],
+    "v":["--verbose"]
 };
 nopt.invalidHandler = function (k, v, t) {
     // TODO: console.log(k,v,t);
@@ -197,7 +199,7 @@ try {
     process.exit();
 }
 
-if (parsedArgs.v) {
+if (parsedArgs.verbose) {
     settings.verbose = true;
 }
 

@@ -19,3 +19,5 @@ locales/zz-ZZ
 nodes/core/locales/zz-ZZ
 .idea
 app/config/config.json
+
+npm-debug.log
