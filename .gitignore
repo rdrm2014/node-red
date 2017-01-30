@@ -21,3 +21,5 @@ nodes/core/locales/zz-ZZ
 app/config/config.json
 
 npm-debug.log
+
+init.js

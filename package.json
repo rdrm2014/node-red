@@ -49,7 +49,6 @@
         "mqtt": "2.2.1",
         "mustache": "2.3.0",
         "nconf": "^0.8.4",
-        "node-red-contrib-join": "^0.9.0",
         "nopt": "3.0.6",
         "oauth2orize":"1.7.0",
         "on-headers":"1.0.1",
