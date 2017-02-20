@@ -6,6 +6,12 @@ block content
 				form(class="show")
 					.form-group
 						h2 a Peer
+					#{Peer}
+					.form-group(style="width: 400px;")
+						label Application
+						select(name="application" class="form-control" disabled)
+							each application in Peer.application
+								option(value=application._id) #{application.name}
 					.form-group(style="width: 400px;")
 						label Name
 						input(value=Peer.name name="name" type="text" class="form-control" disabled)

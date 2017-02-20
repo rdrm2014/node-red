@@ -51,6 +51,7 @@ var logger = require('morgan');
 var index = require(location+'routes/index');
 var users = require(location+'routes/users');
 var peers = require(location+'routes/peers');
+var applications = require(location+'routes/applications');
 
 var server;
 var app = express();
@@ -83,6 +84,7 @@ app.use(passport.session());
 app.use('/', index);
 app.use('/users', users);
 app.use('/peers', peers);
+app.use('/applications', applications);
 
 /*
 // catch 404 and forward to error handler

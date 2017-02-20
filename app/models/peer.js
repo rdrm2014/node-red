@@ -5,6 +5,7 @@ var mongoose = require('mongoose');
 // define the schema for our peer model
 var peerSchema = mongoose.Schema({
     owner: {type: mongoose.Schema.Types.ObjectId, ref: 'User'},
+    application: [{type: mongoose.Schema.Types.ObjectId, ref: 'Application'}],
     name: String,
     description: String,
     ip: String

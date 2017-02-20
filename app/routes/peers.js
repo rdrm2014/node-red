@@ -6,6 +6,7 @@ var router = express.Router();
 
 var src = process.cwd() + '/app/';
 var PeerModel = require(src + 'models/peer');
+var ApplicationModel = require(src + 'models/application');
 
 // Peers
 router.get('/', isLoggedIn, function (req, res) {
@@ -27,9 +28,14 @@ router.get('/', isLoggedIn, function (req, res) {
 });
 
 router.get('/new', isLoggedIn, function (req, res) {
-    res.render('peers/new', {
-        user: req.user
+    ApplicationModel.find({owner: req.user}, function (err, applications) {
+        if (!err) {
+            res.render('peers/new', {user: req.user, Applications: applications});
+        } else {
+            res.render('peers/new', {user: req.user});
+        }
     });
+
 });
 
 router.post('/create', isLoggedIn, function (req, res) {
@@ -43,13 +49,21 @@ router.post('/create', isLoggedIn, function (req, res) {
         ip: req.body['ip']
     };
 
-    PeerModel.create(paramObj, function PeerCreated(err, peer) {
-        if (err) {
-            console.log(err);
-            return res.redirect('/new');
-        }
-        res.redirect('show?id=' + peer.id);
 
+    ApplicationModel.findOne({_id: req.body['application'], owner: req.user}, function (err, application) {
+        if (err)
+            return next(err);
+        if (!application)
+            return next();
+        console.log(application);
+        paramObj["application"] = application;
+        PeerModel.create(paramObj, function PeerCreated(err, peer) {
+            if (err) {
+                console.log(err);
+                return res.redirect('/new');
+            }
+            res.redirect('show?id=' + peer.id);
+        });
     });
 });
 
@@ -57,23 +71,36 @@ router.get('/show', isLoggedIn, function (req, res) {
     console.log(req.query['id']);
     console.log(req.body);
 
-    PeerModel.findOne({_id: req.query['id'], owner: req.user}, function (err, peer) {
-        if (err) return next(err);
-        if (!peer) return next();
-        console.log(peer);
-        res.render('peers/show', {
-            Peer: peer
+    PeerModel
+        .findOne({_id: req.query['id'], owner: req.user})
+        .populate('application') // only return the Persons name
+        .exec(function (err, peer) {
+            if (err) return handleError(err);
+
+            res.render('peers/show', {
+                Peer: peer
+            });
         });
-    });
+
+
+    /*PeerModel.findOne({_id: req.query['id'], owner: req.user}, function (err, peer) {
+        if (err)
+            return next(err);
+        if (!peer)
+            return next();
+        console.log(peer);
+
+    });*/
 });
 
 router.get('/edit', isLoggedIn, function (req, res) {
     PeerModel.findOne({_id: req.query['id'], owner: req.user}, function (err, peer) {
         if (err) return next(err);
         if (!peer) return next('PeerModel doesn\'t exist.');
-
-        res.render('peers/edit', {
-            Peer: peer
+        ApplicationModel.find({owner: req.user}, function (err, applications) {
+            if (!err) {
+                res.render('peers/edit', {user: req.user, Applications: applications, Peer: peer});
+            }
         });
     });
 });
@@ -81,6 +108,7 @@ router.get('/edit', isLoggedIn, function (req, res) {
 router.post('/update', isLoggedIn, function (req, res) {
 
     var paramObj = {
+        application: req.body['application'],
         name: req.body['name'],
         description: req.body['description'],
         ip: req.body['ip']

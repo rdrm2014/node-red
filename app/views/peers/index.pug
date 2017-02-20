@@ -9,6 +9,7 @@ block content
                 if Peers
                     table(class='table table-hover table-condensed')
                         tr
+                            th Application
                             th Name
                             th Description
                             th IP
@@ -17,6 +18,7 @@ block content
                             th
                         each peer in Peers
                             tr(data-id=peer.id data-model="peer")
+                                td #{peer.application}
                                 td #{peer.name}
                                 td #{peer.description}
                                 td #{peer.ip}
