@@ -19,7 +19,10 @@ locales/zz-ZZ
 nodes/core/locales/zz-ZZ
 .idea
 app/config/config.json
+settings
 
 npm-debug.log
 
 init.js
+
+npm-debug.log
