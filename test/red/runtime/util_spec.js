@@ -364,4 +364,65 @@ describe("red/util", function() {
         it("fail <blank>",function() { testInvalid("");})
 
     });
+
+    describe('normaliseNodeTypeName', function() {
+        function normalise(input, expected) {
+            var result = util.normaliseNodeTypeName(input);
+            result.should.eql(expected);
+        }
+
+        it('pass blank',function() { normalise("", "") });
+        it('pass ab1',function() { normalise("ab1", "ab1") });
+        it('pass AB1',function() { normalise("AB1", "aB1") });
+        it('pass a b 1',function() { normalise("a b 1", "aB1") });
+        it('pass a-b-1',function() { normalise("a-b-1", "aB1") });
+        it('pass  ab1 ',function() { normalise(" ab1 ", "ab1") });
+        it('pass _a_b_1_',function() { normalise("_a_b_1_", "aB1") });
+        it('pass http request',function() { normalise("http request", "httpRequest") });
+        it('pass HttpRequest',function() { normalise("HttpRequest", "httpRequest") });
+      });
+
+      describe('prepareJSONataExpression', function() {
+          it('prepares an expression', function() {
+              var result = util.prepareJSONataExpression('payload',{});
+              result.should.have.property('evaluate');
+              result.should.have.property('assign');
+              result.should.have.property('_legacyMode', false);
+          });
+          it('prepares a legacyMode expression', function() {
+              var result = util.prepareJSONataExpression('msg.payload',{});
+              result.should.have.property('evaluate');
+              result.should.have.property('assign');
+              result.should.have.property('_legacyMode', true);
+          });
+      });
+      describe('evaluateJSONataExpression', function() {
+          it('evaluates an expression', function() {
+              var expr = util.prepareJSONataExpression('payload',{});
+              var result = util.evaluateJSONataExpression(expr,{payload:"hello"});
+              result.should.eql("hello");
+          });
+          it('evaluates a legacyMode expression', function() {
+              var expr = util.prepareJSONataExpression('msg.payload',{});
+              var result = util.evaluateJSONataExpression(expr,{payload:"hello"});
+              result.should.eql("hello");
+          });
+          it('accesses flow context from an expression', function() {
+              var expr = util.prepareJSONataExpression('$flowContext("foo")',{context:function() { return {flow:{get: function(key) { return {'foo':'bar'}[key]}}}}});
+              var result = util.evaluateJSONataExpression(expr,{payload:"hello"});
+              result.should.eql("bar");
+          });
+          it('handles non-existant flow context variable', function() {
+              var expr = util.prepareJSONataExpression('$flowContext("nonExistant")',{context:function() { return {flow:{get: function(key) { return {'foo':'bar'}[key]}}}}});
+              var result = util.evaluateJSONataExpression(expr,{payload:"hello"});
+              should.not.exist(result);
+          });
+          it('handles non-existant global context variable', function() {
+              var expr = util.prepareJSONataExpression('$globalContext("nonExistant")',{context:function() { return {global:{get: function(key) { return {'foo':'bar'}[key]}}}}});
+              var result = util.evaluateJSONataExpression(expr,{payload:"hello"});
+              should.not.exist(result);
+          });
+
+      });
+
 });

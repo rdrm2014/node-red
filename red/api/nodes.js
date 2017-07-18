@@ -15,12 +15,12 @@
  **/
 
 var when = require("when");
-var comms = require("./comms");
 var locales = require("./locales");
 var redNodes;
 var log;
 var i18n;
 var settings;
+var events;
 
 module.exports = {
     init: function(runtime) {
@@ -28,6 +28,7 @@ module.exports = {
         log = runtime.log;
         i18n = runtime.i18n;
         settings = runtime.settings;
+        events = runtime.events;
     },
     getAll: function(req,res) {
         if (req.get("accept") == "application/json") {
@@ -48,34 +49,47 @@ module.exports = {
         }
         var node = req.body;
         var promise;
+        var isUpgrade = false;
         if (node.module) {
             var module = redNodes.getModuleInfo(node.module);
             if (module) {
-                log.audit({event: "nodes.install",module:node.module,error:"module_already_loaded"},req);
-                res.status(400).json({error:"module_already_loaded", message:"Module already loaded"});
-                return;
+                if (!node.version || module.version === node.version) {
+                    log.audit({event: "nodes.install",module:node.module, version:node.version, error:"module_already_loaded"},req);
+                    res.status(400).json({error:"module_already_loaded", message:"Module already loaded"});
+                    return;
+                }
+                if (!module.local) {
+                    log.audit({event: "nodes.install",module:node.module, version:node.version, error:"module_not_local"},req);
+                    res.status(400).json({error:"module_not_local", message:"Module not locally installed"});
+                    return;
+                }
+                isUpgrade = true;
             }
-            promise = redNodes.installModule(node.module);
+            promise = redNodes.installModule(node.module,node.version);
         } else {
             log.audit({event: "nodes.install",module:node.module,error:"invalid_request"},req);
             res.status(400).json({error:"invalid_request", message:"Invalid request"});
             return;
         }
         promise.then(function(info) {
-            comms.publish("node/added",info.nodes,false);
+            if (isUpgrade) {
+                events.emit("runtime-event",{id:"node/upgraded",retain:false,payload:{module:node.module,version:node.version}});
+            } else {
+                events.emit("runtime-event",{id:"node/added",retain:false,payload:info.nodes});
+            }
             if (node.module) {
-                log.audit({event: "nodes.install",module:node.module},req);
+                log.audit({event: "nodes.install",module:node.module,version:node.version},req);
                 res.json(info);
             }
         }).otherwise(function(err) {
             if (err.code === 404) {
-                log.audit({event: "nodes.install",module:node.module,error:"not_found"},req);
+                log.audit({event: "nodes.install",module:node.module,version:node.version,error:"not_found"},req);
                 res.status(404).end();
             } else if (err.code) {
-                log.audit({event: "nodes.install",module:node.module,error:err.code},req);
+                log.audit({event: "nodes.install",module:node.module,version:node.version,error:err.code},req);
                 res.status(400).json({error:err.code, message:err.message});
             } else {
-                log.audit({event: "nodes.install",module:node.module,error:err.code||"unexpected_error",message:err.toString()},req);
+                log.audit({event: "nodes.install",module:node.module,version:node.version,error:err.code||"unexpected_error",message:err.toString()},req);
                 res.status(400).json({error:err.code||"unexpected_error", message:err.toString()});
             }
         });
@@ -100,7 +114,7 @@ module.exports = {
             }
 
             promise.then(function(list) {
-                comms.publish("node/removed",list,false);
+                events.emit("runtime-event",{id:"node/removed",retain:false,payload:list});
                 log.audit({event: "nodes.remove",module:mod},req);
                 res.status(204).end();
             }).otherwise(function(err) {
@@ -232,7 +246,7 @@ function putNode(node, enabled) {
 
         return promise.then(function(info) {
             if (info.enabled === enabled && !info.err) {
-                comms.publish("node/"+(enabled?"enabled":"disabled"),info,false);
+                events.emit("runtime-event",{id:"node/"+(enabled?"enabled":"disabled"),retain:false,payload:info});
                 log.info(" "+log._("api.nodes."+(enabled?"enabled":"disabled")));
                 for (var i=0;i<info.types.length;i++) {
                     log.info(" - "+info.types[i]);
