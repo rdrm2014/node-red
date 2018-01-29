@@ -31,6 +31,11 @@ module.exports = function(RED) {
                 try {
                     var $ = cheerio.load(msg.payload);
                     var pay = [];
+                    var count = 0;
+                    $(tag).each(function() {
+                        count++;
+                    });
+                    var index = 0;
                     $(tag).each(function() {
                         if (node.as === "multi") {
                             var pay2 = null;
@@ -40,8 +45,16 @@ module.exports = function(RED) {
                             //if (node.ret === "val")  { pay2 = $(this).val(); }
                             /* istanbul ignore else */
                             if (pay2) {
-                                msg.payload = pay2;
-                                node.send(msg);
+                                var new_msg = RED.util.cloneMessage(msg);
+                                new_msg.payload = pay2;
+                                new_msg.parts = {
+                                    id: msg._msgid,
+                                    index: index,
+                                    count: count,
+                                    type: "string",
+                                    ch: ""
+                                };
+                                node.send(new_msg);
                             }
                         }
                         if (node.as === "single") {
@@ -50,12 +63,14 @@ module.exports = function(RED) {
                             if (node.ret === "attr") { pay.push( this.attribs ); }
                             //if (node.ret === "val")  { pay.push( $(this).val() ); }
                         }
+                        index++;
                     });
-                    if ((node.as === "single") && (pay.length !== 0)) {
+                    if (node.as === "single") {  // Always return an array - even if blank
                         msg.payload = pay;
                         node.send(msg);
                     }
-                } catch (error) {
+                }
+                catch (error) {
                     node.error(error.message,msg);
                 }
             }
