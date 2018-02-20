@@ -149,7 +149,9 @@ module.exports = {
 
         // Get project status - files, commit counts, branch info
         app.get("/:id/status", needsPermission("projects.read"), function(req,res) {
-            runtime.storage.projects.getStatus(req.user, req.params.id).then(function(data) {
+            var includeRemote = req.query.remote;
+
+            runtime.storage.projects.getStatus(req.user, req.params.id, includeRemote).then(function(data) {
                 if (data) {
                     res.json(data);
                 } else {
@@ -248,8 +250,11 @@ module.exports = {
                 res.redirect(303,req.baseUrl+"/"+projectName+"/status");
             })
             .catch(function(err) {
-                console.log(err.stack);
-                res.status(400).json({error:"unexpected_error", message:err.toString()});
+                if (err.code) {
+                    res.status(400).json({error:err.code, message: err.message});
+                } else {
+                    res.status(400).json({error:"unexpected_error", message:err.toString()});
+                }
             })
         });
 
@@ -350,8 +355,9 @@ module.exports = {
         app.post("/:id/pull/?*", needsPermission("projects.write"), function(req,res) {
             var projectName = req.params.id;
             var remoteBranchName = req.params[0];
-            var setRemote = req.query.u;
-            runtime.storage.projects.pull(req.user, projectName,remoteBranchName,setRemote).then(function(data) {
+            var setUpstream = req.query.setUpstream;
+            var allowUnrelatedHistories = req.query.allowUnrelatedHistories;
+            runtime.storage.projects.pull(req.user, projectName,remoteBranchName,setUpstream,allowUnrelatedHistories).then(function(data) {
                 res.status(204).end();
             })
             .catch(function(err) {
@@ -438,8 +444,9 @@ module.exports = {
                 res.json(data);
             })
             .catch(function(err) {
+                console.log(err);
                 if (err.code) {
-                    res.status(400).json({error:err.code, message: err.message});
+                    res.status(400).json({error:err.code, message: err.message, remote: err.remote});
                 } else {
                     res.status(400).json({error:"unexpected_error", message:err.toString()});
                 }
@@ -500,6 +507,10 @@ module.exports = {
         // Add a remote
         app.post("/:id/remotes", needsPermission("projects.write"), function(req,res) {
             var projectName = req.params.id;
+            if (/^https?:\/\/[^/]+@/i.test(req.body.url)) {
+                res.status(400).json({error:"unexpected_error", message:"Git http url must not include username/password"});
+                return;
+            }
             runtime.storage.projects.addRemote(req.user, projectName, req.body).then(function() {
                 res.redirect(303,req.baseUrl+"/"+projectName+"/remotes");
             }).catch(function(err) {

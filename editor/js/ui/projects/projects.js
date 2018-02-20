@@ -19,7 +19,45 @@ RED.projects = (function() {
     var dialogBody;
 
     var activeProject;
-
+    function reportUnexpectedError(error) {
+        var notification;
+        if (error.error === 'git_missing_user') {
+            notification = RED.notify("<p>You Git client is not configured with a username/email.</p>",{
+                fixed: true,
+                type:'error',
+                buttons: [
+                    {
+                        text: "Cancel",
+                        click: function() {
+                            notification.close();
+                        }
+                    },
+                    {
+                        text: "Configure Git client",
+                        click: function() {
+                            RED.userSettings.show('gitconfig');
+                            notification.close();
+                        }
+                    }
+                ]
+            })
+        } else {
+            console.log(error);
+            notification = RED.notify("<p>An unexpected error occurred:</p><p>"+error.message+"</p><small>code: "+error.error+"</small>",{
+                fixed: true,
+                modal: true,
+                type: 'error',
+                buttons: [
+                    {
+                        text: "Close",
+                        click: function() {
+                            notification.close();
+                        }
+                    }
+                ]
+            })
+        }
+    }
     var screens = {};
     function initScreens() {
         var migrateProjectHeader = $('<div class="projects-dialog-screen-start-hero"></div>');
@@ -238,7 +276,7 @@ RED.projects = (function() {
 
                         setTimeout(function() {
                             projectNameInput.focus();
-                            validateForm();
+                            projectNameInput.change();
                         },50);
                         return container;
                     },
@@ -546,6 +584,7 @@ RED.projects = (function() {
                                                 } else {
                                                     show('create-success');
                                                     RED.menu.setDisabled('menu-item-projects-open',false);
+                                                    RED.menu.setDisabled('menu-item-projects-settings',false);
                                                 }
                                             },
                                             400: {
@@ -564,8 +603,9 @@ RED.projects = (function() {
                                                     // getRepoAuthDetails(req);
                                                     console.log("git auth error",error);
                                                 },
-                                                'unexpected_error': function(error) {
-                                                    console.log("unexpected_error",error)
+                                                '*': function(error) {
+                                                    reportUnexpectedError(error);
+                                                    $( dialog ).dialog( "close" );
                                                 }
                                             }
                                         }
@@ -614,6 +654,7 @@ RED.projects = (function() {
                 var projectSecretSelect;
                 var copyProject;
                 var projectRepoInput;
+                var projectCloneSecret;
                 var emptyProjectCredentialInput;
                 var projectRepoUserInput;
                 var projectRepoPasswordInput;
@@ -681,7 +722,12 @@ RED.projects = (function() {
                             } else if (projectType === 'clone') {
                                 var repo = projectRepoInput.val();
 
-                                var validRepo = /^(?:git|ssh|https?|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?[\w\.@:\/~_-]+\.git(?:\/?|\#[\d\w\.\-_]+?)$/.test(repo);
+                                // var validRepo = /^(?:file|git|ssh|https?|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?[\w\.@:\/~_-]+(?:\/?|\#[\d\w\.\-_]+?)$/.test(repo);
+                                var validRepo = repo.length > 0 && !/\s/.test(repo);
+                                if (/^https?:\/\/[^/]+@/i.test(repo)) {
+                                    $("#projects-dialog-screen-create-project-repo-label small").text("Do not include the username/password in the url");
+                                    validRepo = false;
+                                }
                                 if (!validRepo) {
                                     if (projectRepoChanged) {
                                         projectRepoInput.addClass("input-error");
@@ -690,17 +736,17 @@ RED.projects = (function() {
                                 } else {
                                     projectRepoInput.removeClass("input-error");
                                 }
-                                if (/^(?:ssh|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?/.test(repo)) {
+                                if (/^https?:\/\//.test(repo)) {
+                                    $(".projects-dialog-screen-create-row-creds").show();
+                                    $(".projects-dialog-screen-create-row-sshkey").hide();
+                                } else if (/^(?:ssh|[\S]+?@[\S]+?):(?:\/\/)?/.test(repo)) {
                                     $(".projects-dialog-screen-create-row-creds").hide();
                                     $(".projects-dialog-screen-create-row-sshkey").show();
                                     // if ( !getSelectedSSHKey(projectRepoSSHKeySelect) ) {
                                     //     valid = false;
                                     // }
-                                } else if (/^https?:\/\//.test(repo)) {
-                                    $(".projects-dialog-screen-create-row-creds").show();
-                                    $(".projects-dialog-screen-create-row-sshkey").hide();
                                 } else {
-                                    $(".projects-dialog-screen-create-row-creds").show();
+                                    $(".projects-dialog-screen-create-row-creds").hide();
                                     $(".projects-dialog-screen-create-row-sshkey").hide();
                                 }
 
@@ -768,7 +814,11 @@ RED.projects = (function() {
                                 validateForm();
                             },
                             delete: function(project) {
+                                if (projectList) {
+                                    delete projectList[project.name];
+                                }
                                 selectedProject = null;
+
                                 validateForm();
                             }
                         }).appendTo(row);
@@ -888,13 +938,19 @@ RED.projects = (function() {
                         row = $('<div class="hide form-row projects-dialog-screen-create-row projects-dialog-screen-create-row-clone"></div>').appendTo(container);
                         $('<label for="projects-dialog-screen-create-project-repo">Git repository URL</label>').appendTo(row);
                         projectRepoInput = $('<input id="projects-dialog-screen-create-project-repo" type="text" placeholder="https://git.example.com/path/my-project.git"></input>').appendTo(row);
-                        $('<label class="projects-edit-form-sublabel"><small>https:// or ssh://</small></label>').appendTo(row);
+                        $('<label id="projects-dialog-screen-create-project-repo-label" class="projects-edit-form-sublabel"><small>https://, ssh:// or file://</small></label>').appendTo(row);
 
                         var projectRepoChanged = false;
+                        var lastProjectRepo = "";
                         projectRepoInput.on("change keyup paste",function() {
                             projectRepoChanged = true;
                             var repo = $(this).val();
-                            var m = /\/([^/]+)\.git/.exec(repo);
+                            if (lastProjectRepo !== repo) {
+                                $("#projects-dialog-screen-create-project-repo-label small").text("https://, ssh:// or file://");
+                            }
+                            lastProjectRepo = repo;
+
+                            var m = /\/([^/]+?)(?:\.git)?$/.exec(repo);
                             if (m) {
                                 var projectName = projectNameInput.val();
                                 if (projectName === "" || projectName === autoInsertedName) {
@@ -964,10 +1020,12 @@ RED.projects = (function() {
                         // -----------------------------------------------------
 
 
-                        // // Secret - clone
-                        // row = $('<div class="hide form-row projects-dialog-screen-create-row projects-dialog-screen-create-row-clone"></div>').appendTo(container);
-                        // $('<label>Credentials encryption key</label>').appendTo(row);
-                        // projectSecretInput = $('<input type="text"></input>').appendTo(row);
+                        // Secret - clone
+                        row = $('<div class="hide form-row projects-dialog-screen-create-row projects-dialog-screen-create-row-clone"></div>').appendTo(container);
+                        $('<label>Credentials encryption key</label>').appendTo(row);
+                        projectSecretInput = $('<input type="password"></input>').appendTo(row);
+
+
                         switch(options.screen||"empty") {
                             case "empty": createAsEmpty.click(); break;
                             case "open":  openProject.click(); break;
@@ -1025,7 +1083,7 @@ RED.projects = (function() {
                                     } else if (projectType === 'copy') {
                                         projectData.copy = copyProject.name;
                                     } else if (projectType === 'clone') {
-                                        // projectData.credentialSecret = projectSecretInput.val();
+                                        projectData.credentialSecret = projectSecretInput.val();
                                         var repoUrl = projectRepoInput.val();
                                         var metaData = {};
                                         if (/^(?:ssh|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?/.test(repoUrl)) {
@@ -1068,6 +1126,13 @@ RED.projects = (function() {
                                         })
                                     }
 
+                                    $(".projects-dialog-screen-create-row-auth-error").hide();
+
+                                    projectRepoUserInput.removeClass("input-error");
+                                    projectRepoPasswordInput.removeClass("input-error");
+                                    projectRepoSSHKeySelect.removeClass("input-error");
+                                    projectRepoPassphrase.removeClass("input-error");
+
                                     RED.deploy.setDeployInflight(true);
                                     RED.projects.settings.switchProject(projectData.name);
 
@@ -1088,6 +1153,15 @@ RED.projects = (function() {
                                                 },
                                                 'git_connection_failed': function(error) {
                                                     projectRepoInput.addClass("input-error");
+                                                    $("#projects-dialog-screen-create-project-repo-label small").text("Connection failed");
+                                                },
+                                                'git_not_a_repository': function(error) {
+                                                    projectRepoInput.addClass("input-error");
+                                                    $("#projects-dialog-screen-create-project-repo-label small").text("Not a git repository");
+                                                },
+                                                'git_repository_not_found': function(error) {
+                                                    projectRepoInput.addClass("input-error");
+                                                    $("#projects-dialog-screen-create-project-repo-label small").text("Repository not found");
                                                 },
                                                 'git_auth_failed': function(error) {
                                                     $(".projects-dialog-screen-create-row-auth-error").show();
@@ -1098,6 +1172,10 @@ RED.projects = (function() {
                                                     projectRepoSSHKeySelect.addClass("input-error");
                                                     projectRepoPassphrase.addClass("input-error");
                                                 },
+                                                'missing_flow_file': function(error) {
+                                                    // This is handled via a runtime notification.
+                                                    dialog.dialog("close");
+                                                },
                                                 'project_empty': function(error) {
                                                     // This is handled via a runtime notification.
                                                     dialog.dialog("close");
@@ -1106,8 +1184,9 @@ RED.projects = (function() {
                                                     // This is handled via a runtime notification.
                                                     dialog.dialog("close");
                                                 },
-                                                'unexpected_error': function(error) {
-                                                    console.log("unexpected_error",error)
+                                                '*': function(error) {
+                                                    reportUnexpectedError(error);
+                                                    $( dialog ).dialog( "close" );
                                                 }
                                             }
                                         }
@@ -1485,7 +1564,7 @@ RED.projects = (function() {
                     resultCallbackArgs = {error:responses.statusText};
                     return;
                 } else if (options.handleAuthFail !== false && xhr.responseJSON.error === 'git_auth_failed') {
-                    var url = activeProject.git.remotes[options.remote||'origin'].fetch;
+                    var url = activeProject.git.remotes[xhr.responseJSON.remote||options.remote||'origin'].fetch;
 
                     var message = $('<div>'+
                         '<div class="form-row">Authentication required for repository:</div>'+
@@ -1493,7 +1572,10 @@ RED.projects = (function() {
                         '</div>');
 
                     var isSSH = false;
-                    if (/^(?:ssh|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?/.test(url)) {
+                    if (/^https?:\/\//.test(url)) {
+                        $('<div class="form-row"><label for="projects-user-auth-username">Username</label><input id="projects-user-auth-username" type="text"></input></div>'+
+                        '<div class="form-row"><label for=projects-user-auth-password">Password</label><input id="projects-user-auth-password" type="password"></input></div>').appendTo(message);
+                    } else if (/^(?:ssh|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?/.test(url)) {
                         isSSH = true;
                         var row = $('<div class="form-row"></div>').appendTo(message);
                         $('<label for="projects-user-auth-key">SSH Key</label>').appendTo(row);
@@ -1511,9 +1593,6 @@ RED.projects = (function() {
                         row = $('<div class="form-row"></div>').appendTo(message);
                         $('<label for="projects-user-auth-passphrase">Passphrase</label>').appendTo(row);
                         $('<input id="projects-user-auth-passphrase" type="password"></input>').appendTo(row);
-                    } else {
-                        $('<div class="form-row"><label for="projects-user-auth-username">Username</label><input id="projects-user-auth-username" type="text"></input></div>'+
-                          '<div class="form-row"><label for=projects-user-auth-password">Password</label><input id="projects-user-auth-password" type="password"></input></div>').appendTo(message);
                     }
 
                     var notification = RED.notify(message,{
@@ -1551,7 +1630,7 @@ RED.projects = (function() {
 
                                     }
                                     sendRequest({
-                                        url: "projects/"+activeProject.name+"/remotes/"+(options.remote||'origin'),
+                                        url: "projects/"+activeProject.name+"/remotes/"+(xhr.responseJSON.remote||options.remote||'origin'),
                                         type: "PUT",
                                         responses: {
                                             0: function(error) {
@@ -1714,8 +1793,17 @@ RED.projects = (function() {
                             },Math.max(300-(Date.now() - start),0));
                         },
                         400: {
+                            'git_connection_failed': function(error) {
+                                RED.notify(error.message,'error');
+                            },
+                            'git_not_a_repository': function(error) {
+                                RED.notify(error.message,'error');
+                            },
+                            'git_repository_not_found': function(error) {
+                                RED.notify(error.message,'error');
+                            },
                             'unexpected_error': function(error) {
-                                console.log(error);
+                                reportUnexpectedError(error);
                             }
                         }
                     }
@@ -1758,11 +1846,12 @@ RED.projects = (function() {
 
         RED.actions.add("core:new-project",RED.projects.newProject);
         RED.actions.add("core:open-project",RED.projects.selectProject);
-
+        RED.actions.add("core:show-project-settings",RED.projects.settings.show);
         var projectsAPI = {
             sendRequest:sendRequest,
             createBranchList:createBranchList,
-            addSpinnerOverlay:addSpinnerOverlay
+            addSpinnerOverlay:addSpinnerOverlay,
+            reportUnexpectedError:reportUnexpectedError
         };
         RED.projects.settings.init(projectsAPI);
         RED.projects.userSettings.init(projectsAPI);

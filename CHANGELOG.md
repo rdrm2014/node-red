@@ -1,3 +1,80 @@
+#### 0.18.3: Maintenance Release
+
+Projects
+
+ - Fix permissions on git/ssh scripts
+ - Add support for GIT_SSH on older levels of git
+ - Handle host key verification as auth error
+ - Ensure commit list has a refs object even if empty
+ - Make git error detection case-insensitive
+ - Fix up merge conflict handling
+ - Use flow-diff when looking at flow file changes
+
+Node Fixes
+
+ - Ensure debug tools show for 'complete msg object'
+ - Fix msg.parts handling in concat mode of Batch node
+
+Editor Fixes
+
+ - Fix offset calculation when dragging node from palette
+ - Allow a library entry to use non-default node-input- prefixes
+ - Change remote-diff shortcut and add it to keymap Fixes #1628
+
+#### 0.18.2: Maintenance Release
+
+Projects
+
+ - Filter out %D from git log command for older git versions
+ - Ensure projects are created as logged in user
+ - Better error handling/reporting in project creation
+ - Add Project Settings menu option
+ - Refresh vc sidebar on remote add/remove
+ - Fix auth prompt for ssh repos
+ - Prevent http git urls from including username/pword
+ - Fix fetch auth handling on non-default remote
+ - Avoid exception if git not installed
+ - Check version of git client on startup
+ - Fix pull/push when no tracked branch
+ - Add git_pull_unrelated_history handling
+ - Handle delete of last remote in project settings
+
+Node Fixes
+
+ - Fix and Add some Chinese translations
+ - Update sort/batch docs
+ - Don't assume node has defaults when exporting icon property
+ - Ensure send is last thing trigger does
+ - Ensure trigger doesn't set two simultaneous timeouts
+ - Add missing property select var to HTML node
+ - Add a default keepalive to tcp client mode
+ - Move node.send in exec and httprequest nodes
+
+
+#### 0.18.1: Maintenance Release
+
+Projects
+
+ - Handle more repo clone error cases
+ - Relax validation of git urls
+ - Revalidate project name on return to project-details view
+ - Avoid unnecessary project refresh on branch-switch Fixes #1597
+ - Add support for file:// git urls
+ - Handle project first-run without existing flow file
+ - Handle delete of last remote in project settings
+ - Add git_pull_unrelated_history handling
+ - Fix pull/push when no tracked branch
+ - Remember to disable projects in editor when git not found
+
+Node Fixes
+
+ - Trigger node migration - ensure bytopic not blank
+ - Add HEAD to list of methods with no body in http req node #1598
+ - Do not include payload in GET requests Fixes #1598
+ - Update sort/batch docs Fixes #1601
+ - Don't assume node has defaults when exporting icon property
+
+
 #### 0.18: Milestone Release
 
 Runtime
@@ -5,7 +82,7 @@ Runtime
  - Beta: Projects - must be enabled in settings file
  - Allow port zero for Express (#1363)
  - Better error reporting when module provides duplicate type
- - Update jsonata to 1.4.1
+ - Update jsonata to 1.5.0
  - add express-session memorystore without leaks (#1435)
  - Allow adminAuth.user to be a Function Fixes #1461
  - Ensure RED.server is set even if admin api disabled

@@ -67,6 +67,7 @@
                             if (!activeProject) {
                                 // Projects enabled but no active project
                                 RED.menu.setDisabled('menu-item-projects-open',true);
+                                RED.menu.setDisabled('menu-item-projects-settings',true);
                                 if (activeProject === false) {
                                     // User previously decline the migration to projects.
                                 } else { // null/undefined
@@ -130,11 +131,12 @@
                         var project = RED.projects.getActiveProject();
                         var message = {
                             "change-branch":"Change to local branch '"+project.git.branches.local+"'",
-                            "abort-merge":"Git merge aborted",
+                            "merge-abort":"Git merge aborted",
                             "loaded":"Project '"+msg.project+"' loaded",
                             "updated":"Project '"+msg.project+"' updated",
                             "pull":"Project '"+msg.project+"' reloaded",
-                            "revert": "Project '"+msg.project+"' reloaded"
+                            "revert": "Project '"+msg.project+"' reloaded",
+                            "merge-complete":"Git merge completed"
                         }[msg.action];
                         RED.notify("<p>"+message+"</p>");
                         RED.sidebar.info.refresh()
@@ -214,6 +216,20 @@
                                     click: function() {
                                         persistentNotifications[notificationId].hideNotification();
                                         RED.projects.createDefaultFileSet();
+                                    }
+                                }
+                            ]
+                        }
+                    } else if (msg.error === "git_merge_conflict") {
+                        RED.nodes.clear();
+                        RED.sidebar.versionControl.refresh(true);
+                        if (RED.user.hasPermission("projects.write")) {
+                            options.buttons = [
+                                {
+                                    text: "Show merge conflicts",
+                                    click: function() {
+                                        persistentNotifications[notificationId].hideNotification();
+                                        RED.sidebar.versionControl.showLocalChanges();
                                     }
                                 }
                             ]
@@ -320,8 +336,9 @@
         var menuOptions = [];
         if (RED.settings.theme("projects.enabled",false)) {
             menuOptions.push({id:"menu-item-projects-menu",label:"Projects",options:[
-                {id:"menu-item-projects-new",label:"New...",disabled:false,onselect:"core:new-project"},
-                {id:"menu-item-projects-open",label:"Open...",disabled:false,onselect:"core:open-project"}
+                {id:"menu-item-projects-new",label:"New",disabled:false,onselect:"core:new-project"},
+                {id:"menu-item-projects-open",label:"Open",disabled:false,onselect:"core:open-project"},
+                {id:"menu-item-projects-settings",label:"Project Settings",disabled:false,onselect:"core:show-project-settings"}
             ]});
         }
 

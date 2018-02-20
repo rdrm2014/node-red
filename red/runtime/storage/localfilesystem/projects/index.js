@@ -46,7 +46,6 @@ function init(_settings, _runtime) {
 
     try {
         if (settings.editorTheme.projects.enabled === true) {
-            projectLogMessages.push(log._("storage.localfilesystem.projects.disabled"))
             projectsEnabled = true;
         } else if (settings.editorTheme.projects.enabled === false) {
             projectLogMessages.push(log._("storage.localfilesystem.projects.disabled"))
@@ -92,9 +91,21 @@ function init(_settings, _runtime) {
     if (projectsEnabled) {
         return sshTools.init(settings,runtime).then(function() {
             gitTools.init(_settings, _runtime).then(function(gitConfig) {
-                if (!gitConfig) {
-                    projectLogMessages.push(log._("storage.localfilesystem.projects.git-not-found"))
+                if (!gitConfig || /^1\./.test(gitConfig.version)) {
+                    if (!gitConfig) {
+                        projectLogMessages.push(log._("storage.localfilesystem.projects.git-not-found"))
+                    } else {
+                        projectLogMessages.push(log._("storage.localfilesystem.projects.git-version-old",{version:gitConfig.version}))
+                    }
                     projectsEnabled = false;
+                    try {
+                        // As projects have to be turned on, we know this property
+                        // must exist at this point, so turn it off.
+                        // TODO: when on-by-default, this will need to do more
+                        // work to disable.
+                        settings.editorTheme.projects.enabled = false;
+                    } catch(err) {
+                    }
                 } else {
                     globalGitUser = gitConfig.user;
                     Projects.init(settings,runtime);
@@ -201,7 +212,13 @@ function unstageFile(user, project,file) {
 }
 function commit(user, project,options) {
     checkActiveProject(project);
-    return activeProject.commit(user, options);
+    var isMerging = activeProject.isMerging();
+    return activeProject.commit(user, options).then(function() {
+        // The project was merging, now it isn't. Lets reload.
+        if (isMerging && !activeProject.isMerging()) {
+            return reloadActiveProject("merge-complete");
+        }
+    })
 }
 function getFileDiff(user, project,file,type) {
     checkActiveProject(project);
@@ -230,15 +247,15 @@ function push(user, project,remoteBranchName,setRemote) {
     checkActiveProject(project);
     return activeProject.push(user,remoteBranchName,setRemote);
 }
-function pull(user, project,remoteBranchName,setRemote) {
+function pull(user, project,remoteBranchName,setRemote,allowUnrelatedHistories) {
     checkActiveProject(project);
-    return activeProject.pull(user,remoteBranchName,setRemote).then(function() {
+    return activeProject.pull(user,remoteBranchName,setRemote,allowUnrelatedHistories).then(function() {
         return reloadActiveProject("pull");
     });
 }
-function getStatus(user, project) {
+function getStatus(user, project, includeRemote) {
     checkActiveProject(project);
-    return activeProject.status(user);
+    return activeProject.status(user, includeRemote);
 }
 function resolveMerge(user, project,file,resolution) {
     checkActiveProject(project);
@@ -247,7 +264,7 @@ function resolveMerge(user, project,file,resolution) {
 function abortMerge(user, project) {
     checkActiveProject(project);
     return activeProject.abortMerge().then(function() {
-        return reloadActiveProject("abort-merge")
+        return reloadActiveProject("merge-abort")
     });
 }
 function getBranches(user, project,isRemote) {
@@ -330,7 +347,7 @@ function createProject(user, metadata) {
         metadata.files.oldCredentials = credentialsFile;
         metadata.files.credentialSecret = currentEncryptionKey;
     }
-    return Projects.create(null,metadata).then(function(p) {
+    return Projects.create(user, metadata).then(function(p) {
         return setActiveProject(user, p.name);
     }).then(function() {
         return getProject(user, metadata.name);
@@ -467,6 +484,13 @@ function getFlows() {
             error.code = "missing_flow_file";
             return when.reject(error);
         }
+        if (activeProject.isMerging()) {
+            log.warn("Project has unmerged changes");
+            error = new Error("Project has unmerged changes. Cannot load flows");
+            error.code = "git_merge_conflict";
+            return when.reject(error);
+        }
+
     }
     return util.readFile(flowsFullPath,flowsFileBackup,[],'flow');
 }
@@ -474,6 +498,11 @@ function getFlows() {
 function saveFlows(flows) {
     if (settings.readOnly) {
         return when.resolve();
+    }
+    if (activeProject && activeProject.isMerging()) {
+        var error = new Error("Project has unmerged changes. Cannot deploy new flows");
+        error.code = "git_merge_conflict";
+        return when.reject(error);
     }
 
     try {

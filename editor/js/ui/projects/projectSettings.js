@@ -49,7 +49,7 @@ RED.projects.settings = (function() {
         var tabContainer;
 
         var trayOptions = {
-            title: "Project Information",// RED._("menu.label.userSettings"),, // TODO: nls
+            title: "Project Settings",// RED._("menu.label.userSettings"),, // TODO: nls
             buttons: [
                 {
                     id: "node-dialog-ok",
@@ -143,7 +143,8 @@ RED.projects.settings = (function() {
                             RED.sidebar.versionControl.refresh(true);
                         },
                         400: {
-                            'unexpected_error': function(error) {
+                            '*': function(error) {
+                                utils.reportUnexpectedError(error);
                                 done(error,null);
                             }
                         },
@@ -208,7 +209,8 @@ RED.projects.settings = (function() {
                             done(null,data);
                         },
                         400: {
-                            'unexpected_error': function(error) {
+                            '*': function(error) {
+                                utils.reportUnexpectedError(error);
                                 done(error,null);
                             }
                         },
@@ -962,7 +964,7 @@ RED.projects.settings = (function() {
                 var done = function(err) {
                     spinner.remove();
                     if (err) {
-                        console.log(err);
+                        utils.reportUnexpectedError(err);
                         return;
                     }
                     flowFileLabelText.text(flowFileInput.val());
@@ -1005,10 +1007,6 @@ RED.projects.settings = (function() {
                             'credentials_load_failed': function(error) {
                                 done(error);
                             },
-                            'unexpected_error': function(error) {
-                                console.log(error);
-                                done(error);
-                            },
                             'missing_current_credential_key':  function(error) {
                                 credentialSecretExistingInput.addClass("input-error");
                                 popover = RED.popover.create({
@@ -1019,11 +1017,16 @@ RED.projects.settings = (function() {
                                     autoClose: 3000
                                 }).open();
                                 done(error);
+                            },
+                            '*': function(error) {
+                                done(error);
                             }
                         },
                     }
                 },payload).always(function() {
-                    RED.deploy.setDeployInflight(false);
+                    setTimeout(function() {
+                        RED.deploy.setDeployInflight(false);
+                    },500);
                 });
             });
         var updateForm = function() {
@@ -1142,8 +1145,8 @@ RED.projects.settings = (function() {
                                                                 ]
                                                             });
                                                         },
-                                                        'unexpected_error': function(error) {
-                                                            console.log(error);
+                                                        '*': function(error) {
+                                                            utils.reportUnexpectedError(error);
                                                             spinner.remove();
                                                         }
                                                     },
@@ -1193,11 +1196,19 @@ RED.projects.settings = (function() {
                 editRepoButton.attr('disabled',true);
                 addRemoteDialog.slideDown(200, function() {
                     addRemoteDialog[0].scrollIntoView();
+                    if (isEmpty) {
+                        remoteNameInput.val('origin');
+                        remoteURLInput.focus();
+                    } else {
+                        remoteNameInput.focus();
+                    }
+                    validateForm();
                 });
             });
 
 
         var emptyItem = { empty: true };
+        var isEmpty = true;
         var row = $('<div class="user-settings-row"></div>').appendTo(repoContainer);
         var addRemoteDialog = $('<div class="projects-dialog-list-dialog"></div>').hide().appendTo(row);
         row = $('<div class="user-settings-row projects-dialog-list"></div>').appendTo(repoContainer);
@@ -1253,20 +1264,24 @@ RED.projects.settings = (function() {
                                                         row.fadeOut(200,function() {
                                                             remotesList.editableList('removeItem',entry);
                                                             setTimeout(spinner.remove, 100);
-                                                            activeProject.git.remotes = {};
-                                                            data.remotes.forEach(function(remote) {
-                                                                var name = remote.name;
-                                                                delete remote.name;
-                                                                activeProject.git.remotes[name] = remote;
-                                                            });
                                                             if (data.remotes.length === 0) {
+                                                                delete activeProject.git.remotes;
+                                                                isEmpty = true;
                                                                 remotesList.editableList('addItem',emptyItem);
+                                                            } else {
+                                                                activeProject.git.remotes = {};
+                                                                data.remotes.forEach(function(remote) {
+                                                                    var name = remote.name;
+                                                                    delete remote.name;
+                                                                    activeProject.git.remotes[name] = remote;
+                                                                });
                                                             }
+                                                            RED.sidebar.versionControl.refresh();
                                                         });
                                                     },
                                                     400: {
-                                                        'unexpected_error': function(error) {
-                                                            console.log(error);
+                                                        '*': function(error) {
+                                                            utils.reportUnexpectedError(error);
                                                             spinner.remove();
                                                         }
                                                     },
@@ -1287,15 +1302,26 @@ RED.projects.settings = (function() {
 
         var validateForm = function() {
             var validName = /^[a-zA-Z0-9\-_]+$/.test(remoteNameInput.val());
-            var validRepo = /^(?:git|ssh|https?|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?[\w\.@:\/~_-]+\.git(?:\/?|\#[\d\w\.\-_]+?)$/.test(remoteURLInput.val());
+            var repo = remoteURLInput.val();
+            // var validRepo = /^(?:file|git|ssh|https?|[\d\w\.\-_]+@[\w\.]+):(?:\/\/)?[\w\.@:\/~_-]+(?:\.git)?(?:\/?|\#[\d\w\.\-_]+?)$/.test(remoteURLInput.val());
+            var validRepo = repo.length > 0 && !/\s/.test(repo);
+            if (/^https?:\/\/[^/]+@/i.test(repo)) {
+                remoteURLLabel.text("Do not include the username/password in the url");
+                validRepo = false;
+            } else {
+                remoteURLLabel.text("https://, ssh:// or file://");
+            }
             saveButton.attr('disabled',(!validName || !validRepo))
             remoteNameInput.toggleClass('input-error',remoteNameInputChanged&&!validName);
+            remoteURLInput.toggleClass('input-error',remoteURLInputChanged&&!validRepo);
             if (popover) {
                 popover.close();
                 popover = null;
             }
         };
         var popover;
+        var remoteNameInputChanged = false;
+        var remoteURLInputChanged = false;
 
         $('<div class="projects-dialog-list-dialog-header">').text('Add remote').appendTo(addRemoteDialog);
 
@@ -1305,11 +1331,14 @@ RED.projects.settings = (function() {
             remoteNameInputChanged = true;
             validateForm();
         });
-        var remoteNameInputChanged = false;
         $('<label class="projects-edit-form-sublabel"><small>Must contain only A-Z 0-9 _ -</small></label>').appendTo(row).find("small");
         row = $('<div class="user-settings-row"></div>').appendTo(addRemoteDialog);
         $('<label for=""></label>').text('URL').appendTo(row);
-        var remoteURLInput = $('<input type="text">').appendTo(row).on("change keyup paste",validateForm);
+        var remoteURLInput = $('<input type="text">').appendTo(row).on("change keyup paste",function() {
+            remoteURLInputChanged = true;
+            validateForm()
+        });
+        var remoteURLLabel = $('<label class="projects-edit-form-sublabel"><small>https://, ssh:// or file://</small></label>').appendTo(row).find("small");
 
         var hideEditForm = function() {
             editRepoButton.attr('disabled',false);
@@ -1363,6 +1392,7 @@ RED.projects.settings = (function() {
                                 activeProject.git.remotes[name] = remote;
                             });
                             updateForm();
+                            RED.sidebar.versionControl.refresh();
                             done();
                         },
                         400: {
@@ -1377,14 +1407,15 @@ RED.projects.settings = (function() {
                                 remoteNameInput.addClass('input-error');
                                 done(error);
                             },
-                            'unexpected_error': function(error) {
-                                console.log(error);
+                            '*': function(error) {
+                                utils.reportUnexpectedError(error);
                                 done(error);
                             }
                         },
                     }
                 },payload);
             });
+
         var updateForm = function() {
             remotesList.editableList('empty');
             var count = 0;
@@ -1396,7 +1427,8 @@ RED.projects.settings = (function() {
                     }
                 }
             }
-            if (count === 0) {
+            isEmpty = (count === 0);
+            if (isEmpty) {
                 remotesList.editableList('addItem',emptyItem);
             }
         }

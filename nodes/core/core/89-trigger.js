@@ -100,8 +100,6 @@ module.exports = function(RED) {
                         msg.payload = RED.util.evaluateNodeProperty(node.op1,node.op1type,node,msg);
                     }
 
-                    if (node.op1type !== "nul") { node.send(RED.util.cloneMessage(msg)); }
-
                     if (node.duration === 0) { node.topics[topic].tout = 0; }
                     else if (node.loop === true) {
                         /* istanbul ignore else  */
@@ -113,21 +111,24 @@ module.exports = function(RED) {
                         }
                     }
                     else {
-                        node.topics[topic].tout = setTimeout(function() {
-                            var msg2 = null;
-                            if (node.op2type !== "nul") {
-                                msg2 = RED.util.cloneMessage(msg);
-                                if (node.op2type === "flow" || node.op2type === "global") {
-                                    node.topics[topic].m2 = RED.util.evaluateNodeProperty(node.op2,node.op2type,node,msg);
+                        if (!node.topics[topic].tout) {
+                            node.topics[topic].tout = setTimeout(function() {
+                                var msg2 = null;
+                                if (node.op2type !== "nul") {
+                                    msg2 = RED.util.cloneMessage(msg);
+                                    if (node.op2type === "flow" || node.op2type === "global") {
+                                        node.topics[topic].m2 = RED.util.evaluateNodeProperty(node.op2,node.op2type,node,msg);
+                                    }
+                                    msg2.payload = node.topics[topic].m2;
+                                    delete node.topics[topic];
+                                    node.send(msg2);
                                 }
-                                msg2.payload = node.topics[topic].m2;
-                            }
-                            delete node.topics[topic];
-                            node.status({});
-                            node.send(msg2);
-                        }, node.duration);
+                                node.status({});
+                            }, node.duration);
+                        }
                     }
                     node.status({fill:"blue",shape:"dot",text:" "});
+                    if (node.op1type !== "nul") { node.send(RED.util.cloneMessage(msg)); }
                 }
                 else if ((node.extend === "true" || node.extend === true) && (node.duration > 0)) {
                     /* istanbul ignore else  */

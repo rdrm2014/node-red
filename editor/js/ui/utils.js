@@ -476,7 +476,7 @@ RED.utils = (function() {
                     for (i=0;i<keys.length;i++) {
                         var row = $('<div class="debug-message-object-entry collapsed"></div>').appendTo(element);
                         var newPath = path;
-                        if (newPath) {
+                        if (newPath !== undefined) {
                             if (/^[a-zA-Z_$][0-9a-zA-Z_$]*$/.test(keys[i])) {
                                 newPath += (newPath.length > 0?".":"")+keys[i];
                             } else {
@@ -721,7 +721,12 @@ RED.utils = (function() {
 
         var iconPath = separateIconPath(icon_url);
         if (!iconPath.module) {
-            iconPath.module = def.set.module;
+            if (def.set) {
+                iconPath.module = def.set.module;
+            } else {
+                // Handle subflow instance nodes that don't have def.set
+                iconPath.module = "node-red";
+            }
         }
         return iconPath;
     }

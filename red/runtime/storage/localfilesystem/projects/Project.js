@@ -127,7 +127,7 @@ Project.prototype.load = function () {
 
         promises.push(project.loadRemotes());
 
-        return when.settle(promises).then(function() {
+        return when.settle(promises).then(function(results) {
             return project;
         })
     });
@@ -179,15 +179,19 @@ Project.prototype.loadRemotes = function() {
         project.branches = {};
         return project.status();
     }).then(function() {
-        var allRemotes = Object.keys(project.remotes);
-        var match = "";
-        if (project.branches.remote) {
-            allRemotes.forEach(function(remote) {
-                if (project.branches.remote.indexOf(remote) === 0 && match.length < remote.length) {
-                    match = remote;
-                }
-            });
-            project.currentRemote = project.parseRemoteBranch(project.branches.remote).remote;
+        if (project.remotes) {
+            var allRemotes = Object.keys(project.remotes);
+            var match = "";
+            if (project.branches.remote) {
+                allRemotes.forEach(function(remote) {
+                    if (project.branches.remote.indexOf(remote) === 0 && match.length < remote.length) {
+                        match = remote;
+                    }
+                });
+                project.currentRemote = project.parseRemoteBranch(project.branches.remote).remote;
+            }
+        } else {
+            delete project.currentRemote;
         }
     });
 }
@@ -214,6 +218,9 @@ Project.prototype.parseRemoteBranch = function (remoteBranch) {
 Project.prototype.isEmpty = function () {
     return this.empty;
 };
+Project.prototype.isMerging = function() {
+    return this.merging;
+}
 
 Project.prototype.update = function (user, data) {
     var username;
@@ -370,14 +377,20 @@ Project.prototype.unstageFile = function(file) {
     return gitTools.unstageFile(this.path,file);
 }
 Project.prototype.commit = function(user, options) {
-    return gitTools.commit(this.path,options.message,getGitUser(user));
+    var self = this;
+    return gitTools.commit(this.path,options.message,getGitUser(user)).then(function() {
+        if (self.merging) {
+            self.merging = false;
+            return
+        }
+    });
 }
 Project.prototype.getFileDiff = function(file,type) {
     return gitTools.getFileDiff(this.path,file,type);
 }
 Project.prototype.getCommits = function(options) {
     return gitTools.getCommits(this.path,options).catch(function(err) {
-        if (/ambiguous argument/.test(err.message) || /does not have any commits yet/.test(err.message)) {
+        if (/bad default revision/i.test(err.message) || /ambiguous argument/i.test(err.message) || /does not have any commits yet/i.test(err.message)) {
             return {
                 count:0,
                 commits:[],
@@ -406,11 +419,11 @@ Project.prototype.revertFile = function (filePath) {
 
 
 
-Project.prototype.status = function(user) {
+Project.prototype.status = function(user, includeRemote) {
     var self = this;
 
     var fetchPromise;
-    if (this.remotes) {
+    if (this.remotes && includeRemote) {
         fetchPromise = gitTools.getRemoteBranch(self.path).then(function(remoteBranch) {
             if (remoteBranch) {
                 var allRemotes = Object.keys(self.remotes);
@@ -436,6 +449,21 @@ Project.prototype.status = function(user) {
             var result = results[0];
             if (results[1]) {
                 result.merging = true;
+                if (!self.merging) {
+                    self.merging = true;
+                    runtime.events.emit("runtime-event",{
+                        id:"runtime-state",
+                        payload:{
+                            type:"warning",
+                            error:"git_merge_conflict",
+                            project:self.name,
+                            text:"notification.warnings.git_merge_conflict"
+                        },
+                        retain:true}
+                    );
+                }
+            } else {
+                self.merging = false;
             }
             self.branches.local = result.branches.local;
             self.branches.remote = result.branches.remote;
@@ -508,7 +536,7 @@ Project.prototype.push = function (user,remoteBranchName,setRemote) {
     return gitTools.push(this.path, remote.remote || this.currentRemote,remote.branch, setRemote, authCache.get(this.name,this.remotes[remote.remote || this.currentRemote].fetch,username));
 };
 
-Project.prototype.pull = function (user,remoteBranchName,setRemote) {
+Project.prototype.pull = function (user,remoteBranchName,setRemote,allowUnrelatedHistories) {
     var username;
     if (!user) {
         username = "_";
@@ -518,17 +546,23 @@ Project.prototype.pull = function (user,remoteBranchName,setRemote) {
     var self = this;
     if (setRemote) {
         return gitTools.setUpstream(this.path, remoteBranchName).then(function() {
-            return gitTools.pull(self.path, null, null, authCache.get(self.name,this.remotes[this.currentRemote].fetch,username));
+            self.currentRemote = self.parseRemoteBranch(remoteBranchName).remote;
+            return gitTools.pull(self.path, null, null, allowUnrelatedHistories, authCache.get(self.name,self.remotes[self.currentRemote].fetch,username),getGitUser(user));
         })
     } else {
         var remote = this.parseRemoteBranch(remoteBranchName);
-        return gitTools.pull(this.path, remote.remote, remote.branch, authCache.get(this.name,this.remotes[this.currentRemote].fetch,username));
+        return gitTools.pull(this.path, remote.remote, remote.branch, allowUnrelatedHistories, authCache.get(this.name,this.remotes[remote.remote||self.currentRemote].fetch,username),getGitUser(user));
     }
 };
 
 Project.prototype.resolveMerge = function (file,resolutions) {
     var filePath = fspath.join(this.path,file);
     var self = this;
+    if (typeof resolutions === 'string') {
+        return util.writeFile(filePath, resolutions).then(function() {
+            return self.stageFile(file);
+        })
+    }
     return fs.readFile(filePath,"utf8").then(function(content) {
         var lines = content.split("\n");
         var result = [];
@@ -568,7 +602,10 @@ Project.prototype.resolveMerge = function (file,resolutions) {
     });
 };
 Project.prototype.abortMerge = function () {
-    return gitTools.abortMerge(this.path);
+    var self = this;
+    return gitTools.abortMerge(this.path).then(function() {
+        self.merging = false;
+    })
 };
 
 Project.prototype.getBranches = function (user, isRemote) {
@@ -728,6 +765,7 @@ Project.prototype.toJSON = function () {
 
 
 function getCredentialsFilename(filename) {
+    filename = filename || "undefined";
     // TODO: DRY - ./index.js
     var ffDir = fspath.dirname(filename);
     var ffExt = fspath.extname(filename);
@@ -736,6 +774,7 @@ function getCredentialsFilename(filename) {
 }
 function getBackupFilename(filename) {
     // TODO: DRY - ./index.js
+    filename = filename || "undefined";
     var ffName = fspath.basename(filename);
     var ffDir = fspath.dirname(filename);
     return fspath.join(ffDir,"."+ffName+".backup");
@@ -781,9 +820,14 @@ function createDefaultProject(user, project) {
                     files.push(baseCredentialFileName);
                     flowFilePath = fspath.join(projectPath,baseFlowFileName);
                     credsFilePath = fspath.join(projectPath,baseCredentialFileName);
-                    log.trace("Migrating "+project.files.oldFlow+" to "+flowFilePath);
+                    if (fs.existsSync(project.files.oldFlow)) {
+                        log.trace("Migrating "+project.files.oldFlow+" to "+flowFilePath);
+                        promises.push(fs.copy(project.files.oldFlow,flowFilePath));
+                    } else {
+                        log.trace(project.files.oldFlow+" does not exist - creating blank file");
+                        promises.push(util.writeFile(flowFilePath,"[]"));
+                    }
                     log.trace("Migrating "+project.files.oldCredentials+" to "+credsFilePath);
-                    promises.push(fs.copy(project.files.oldFlow,flowFilePath));
                     runtime.nodes.setCredentialSecret(project.credentialSecret);
                     promises.push(runtime.nodes.exportCredentials().then(function(creds) {
                         var credentialData;
@@ -902,40 +946,17 @@ function createProject(user, metadata) {
                         );
                         auth = authCache.get(project,originRemote.url,username);
                     }
-                    return gitTools.clone(originRemote,auth,projectPath).then(function(result) {
-                        // Check this is a valid project
-                        // If it is empty
-                        //  - if 'populate' flag is set, call populateProject
-                        //  - otherwise reject with suitable error to allow UI to confirm population
-                        // If it is missing package.json/flow.json/flow_cred.json
-                        //  - reject as invalid project
-
-                        // checkProjectFiles(project).then(function(results) {
-                        //     console.log("checkProjectFiles");
-                        //     console.log(results);
-                        // });
-                        // return gitTools.getFiles(projectPath).then(function() {
-                        //     // It wasn't an empty repository.
-                        //     // TODO: check for required files -  checkProjectFiles
-                        //
-                        // }).catch(function(err) {
-                        //     if (/ambiguous argument/.test(err.message)) {
-                        //         // Empty repository
-                        //         err.code = "project_empty";
-                        //         err.message = "Project is empty";
-                        //     }
-                        //     throw err;
-                        // });
-                        resolve(getProject(project));
-                    }).catch(function(error) {
-                        fs.remove(projectPath,function() {
-                            reject(error);
-                        });
-                    })
+                    return gitTools.clone(originRemote,auth,projectPath);
                 } else {
-                    createDefaultProject(user, metadata).then(function() { resolve(getProject(project))}).catch(reject);
+                    return createDefaultProject(user, metadata);
                 }
-            }).catch(reject);
+            }).then(function() {
+                resolve(getProject(project))
+            }).catch(function(err) {
+                fs.remove(projectPath,function() {
+                    reject(err);
+                });
+            });
         })
     })
 }

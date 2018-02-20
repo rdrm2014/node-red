@@ -37,32 +37,49 @@ function runGitCommand(args,cwd,env) {
         child.stdout.on('data', function(data) {
             stdout += data;
         });
-
         child.stderr.on('data', function(data) {
             stderr += data;
         });
-
+        child.on('error', function(err) {
+            stderr = err.toString();
+        })
         child.on('close', function(code) {
             if (code !== 0) {
                 var err = new Error(stderr);
                 err.stdout = stdout;
                 err.stderr = stderr;
-                if (/fatal: could not read Username/.test(stderr)) {
+                if (/fatal: could not read/i.test(stderr)) {
+                    // Username/Password
                     err.code = "git_auth_failed";
-                } else if(/HTTP Basic: Access denied/.test(stderr)) {
+                } else if(/HTTP Basic: Access denied/i.test(stderr)) {
                     err.code = "git_auth_failed";
-                } else if(/Permission denied \(publickey\)/.test(stderr)) {
+                } else if(/Permission denied \(publickey\)/i.test(stderr)) {
                     err.code = "git_auth_failed";
-                } else if(/Connection refused/.test(stderr)) {
+                } else if(/Host key verification failed/i.test(stderr)) {
+                    // TODO: handle host key verification errors separately
+                    err.code = "git_auth_failed";
+                } else if(/Connection refused/i.test(stderr)) {
                     err.code = "git_connection_failed";
-                } else if (/commit your changes or stash/.test(stderr)) {
+                } else if (/commit your changes or stash/i.test(stderr)) {
                     err.code = "git_local_overwrite";
                 } else if (/CONFLICT/.test(err.stdout)) {
                     err.code = "git_pull_merge_conflict";
-                } else if (/not fully merged/.test(stderr)) {
+                } else if (/not fully merged/i.test(stderr)) {
                     err.code = "git_delete_branch_unmerged";
-                } else if (/remote .* already exists/.test(stderr)) {
+                } else if (/remote .* already exists/i.test(stderr)) {
                     err.code = "git_remote_already_exists";
+                } else if (/does not appear to be a git repository/i.test(stderr)) {
+                    err.code = "git_not_a_repository";
+                } else if (/Repository not found/i.test(stderr)) {
+                    err.code = "git_repository_not_found";
+                } else if (/repository '.*' does not exist/i.test(stderr)) {
+                    err.code = "git_repository_not_found";
+                } else if (/refusing to merge unrelated histories/i.test(stderr)) {
+                    err.code = "git_pull_unrelated_history"
+                } else if (/Please tell me who you are/i.test(stderr)) {
+                    err.code = "git_missing_user";
+                } else if (/name consists only of disallowed characters/i.test(stderr)) {
+                    err.code = "git_missing_user";
                 }
                 return reject(err);
             }
@@ -91,6 +108,10 @@ function runGitCommandWithSSHCommand(args,cwd,auth) {
         commandEnv.NODE_RED_GIT_NODE_PATH = process.execPath;
         commandEnv.NODE_RED_GIT_SOCK_PATH = rs.path;
         commandEnv.NODE_RED_GIT_ASKPASS_PATH = path.join(__dirname,"authWriter.js");
+        // For git < 2.3.0
+        commandEnv.GIT_SSH = path.join(__dirname,"node-red-ssh.sh");
+        commandEnv.NODE_RED_KEY_FILE=auth.key_path;
+        // GIT_SSH_COMMAND - added in git 2.3.0
         commandEnv.GIT_SSH_COMMAND = "ssh -i " + auth.key_path + " -F /dev/null";
         // console.log('commandEnv:', commandEnv);
         return runGitCommand(args,cwd,commandEnv).finally(function() {
@@ -151,7 +172,7 @@ function getStatus(localRepo) {
     return runGitCommand(['rev-list', 'HEAD', '--count'],localRepo).then(function(count) {
         result.commits.total = parseInt(count);
     }).catch(function(err) {
-        if (/ambiguous argument/.test(err.message)) {
+        if (/ambiguous argument/i.test(err.message)) {
             result.commits.total = 0;
         } else {
             throw err;
@@ -183,7 +204,7 @@ function getStatus(localRepo) {
             return runGitCommand(["status","--porcelain","-b"],localRepo).then(function(output) {
                 var lines = output.split("\n");
                 var unknownDirs = [];
-                var branchLineRE = /^## (?:No commits yet on )?(.+?)(?:$|\.\.\.(.+?)(?:$| \[(?:(?:ahead (\d+)(?:,\s*)?)?(?:behind (\d+))?|(gone))\]))/;
+                var branchLineRE = /^## (?:(?:No commits yet on )|(?:Initial commit on))?(.+?)(?:$|\.\.\.(.+?)(?:$| \[(?:(?:ahead (\d+)(?:,\s*)?)?(?:behind (\d+))?|(gone))\]))/;
                 lines.forEach(function(line) {
                     if (line==="") {
                         return;
@@ -274,8 +295,13 @@ function parseLog(log) {
         }
         var m = /^(.*): (.*)$/.exec(l);
         if (m) {
+            // git 2.1.4 (Debian Stable) doesn't support %D for refs - so filter out
             if (m[1] === 'refs' && m[2]) {
-                currentCommit[m[1]] = m[2].split(",").map(function(v) { return v.trim() });
+                if (m[2] !== '%D') {
+                    currentCommit[m[1]] = m[2].split(",").map(function(v) { return v.trim() });
+                } else {
+                    currentCommit[m[1]] = [];
+                }
             } else {
                 if (m[1] === 'parents') {
                     currentCommit[m[1]] = m[2].split(" ");
@@ -387,9 +413,10 @@ module.exports = {
                         email: globalUserEmail
                     }
                 }
+                log.trace("git init: "+JSON.stringify(result));
                 resolve(result);
             }).catch(function(err) {
-                console.log(err);
+                log.trace("git init: git not found");
                 resolve(null);
             });
         });
@@ -401,11 +428,20 @@ module.exports = {
         var args = ["branch","--set-upstream-to",remoteBranch];
         return runGitCommand(args,cwd);
     },
-    pull: function(cwd,remote,branch,auth) {
+    pull: function(cwd,remote,branch,allowUnrelatedHistories,auth,gitUser) {
         var args = ["pull"];
         if (remote && branch) {
             args.push(remote);
             args.push(branch);
+        }
+        if (gitUser && gitUser['name'] && gitUser['email']) {
+            args.unshift('user.name="'+gitUser['name']+'"');
+            args.unshift('-c');
+            args.unshift('user.email="'+gitUser['email']+'"');
+            args.unshift('-c');
+        }
+        if (allowUnrelatedHistories) {
+            args.push("--allow-unrelated-histories");
         }
         var promise;
         if (auth) {
@@ -418,18 +454,19 @@ module.exports = {
         } else {
             promise = runGitCommand(args,cwd)
         }
-        return promise.catch(function(err) {
-            if (/CONFLICT/.test(err.stdout)) {
-                var e = new Error("NLS: pull failed - merge conflict");
-                e.code = "git_pull_merge_conflict";
-                throw e;
-            } else if (/Please commit your changes or stash/.test(err.message)) {
-                var e = new Error("NLS: Pull failed - local changes would be overwritten");
-                e.code = "git_pull_overwrite";
-                throw e;
-            }
-            throw err;
-        });
+        return promise;
+        // .catch(function(err) {
+        //     if (/CONFLICT/.test(err.stdout)) {
+        //         var e = new Error("pull failed - merge conflict");
+        //         e.code = "git_pull_merge_conflict";
+        //         throw e;
+        //     } else if (/Please commit your changes or stash/i.test(err.message)) {
+        //         var e = new Error("Pull failed - local changes would be overwritten");
+        //         e.code = "git_pull_overwrite";
+        //         throw e;
+        //     }
+        //     throw err;
+        // });
     },
     push: function(cwd,remote,branch,setUpstream, auth) {
         var args = ["push"];
@@ -529,7 +566,7 @@ module.exports = {
         return runGitCommand(args,cwd,env);
     },
     getFileDiff(cwd,file,type) {
-        var args = ["diff"];
+        var args = ["diff","-w"];
         if (type === "tree") {
             // nothing else to do
         } else if (type === "index") {
@@ -586,7 +623,7 @@ module.exports = {
     getRemotes: getRemotes,
     getRemoteBranch: function(cwd) {
         return runGitCommand(['rev-parse','--abbrev-ref','--symbolic-full-name','@{u}'],cwd).catch(function(err) {
-            if (/no upstream configured for branch/.test(err.message)) {
+            if (/no upstream configured for branch/i.test(err.message)) {
                 return null;
             }
             throw err;
